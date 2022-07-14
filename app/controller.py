@@ -11,7 +11,7 @@ from qcloud_cos import CosS3Client
 from app.api import api
 from .exception import ImageNotFound
 from .model import COS
-from .schema import CosOutSchema
+from .schema import CosOutSchema, CosOutSchemaList
 
 client = LocalProxy(lambda: get_cos_client())
 
@@ -56,7 +56,7 @@ def upload_one():
 
 @cos_api.route("/upload_multiple", methods=["POST"])
 @api.validate(
-    resp=DocResponse(r=CosOutSchema),
+    resp=DocResponse(r=CosOutSchemaList),
     tags=["cos"],
 )
 def upload_multiple():
