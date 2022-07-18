@@ -6,8 +6,6 @@
 from flask import request
 from werkzeug.local import LocalProxy
 from lin import Redprint, Failed, ParameterError, db, lin_config, DocResponse
-from qcloud_cos import CosConfig
-from qcloud_cos import CosS3Client
 from app.api import api
 from .exception import ImageNotFound
 from .model import COS
@@ -105,7 +103,10 @@ def upload_image_and_create_cos(name: str, data: bytes) -> dict:
     return res
 
 
-def get_cos_client() -> CosS3Client:
+def get_cos_client():
+    from qcloud_cos import CosConfig
+    from qcloud_cos import CosS3Client
+
     token, proxies, endpoint, domain = None, None, None, None
     secret_id = lin_config.get_config("cos.access_key_id")
     secret_key = lin_config.get_config("cos.access_key_secret")
