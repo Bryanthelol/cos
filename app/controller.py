@@ -4,9 +4,11 @@
     :email: bryantsisu@qq.com
 """
 from flask import request
+from lin import DocResponse, Failed, ParameterError, Redprint, db, lin_config, login_required
 from werkzeug.local import LocalProxy
-from lin import Redprint, Failed, ParameterError, db, lin_config, DocResponse
-from app.api import api
+
+from app.api import AuthorizationBearerSecurity, api
+
 from .exception import ImageNotFound
 from .model import COS
 from .schema import CosOutSchema, CosOutSchemaList
@@ -17,9 +19,11 @@ cos_api = Redprint("cos")
 
 
 @cos_api.route("/<int:_id>")
+@login_required
 @api.validate(
     resp=DocResponse(ImageNotFound, r=CosOutSchema),
     tags=["cos"],
+    security=[AuthorizationBearerSecurity],
 )
 def get_cos_image(_id):
     """
@@ -39,9 +43,11 @@ def get_cos_image(_id):
 
 
 @cos_api.route("/upload_one", methods=["POST"])
+@login_required
 @api.validate(
     resp=DocResponse(r=CosOutSchema),
     tags=["cos"],
+    security=[AuthorizationBearerSecurity],
 )
 def upload_one():
     image = request.files.get("image", None)
@@ -53,9 +59,11 @@ def upload_one():
 
 
 @cos_api.route("/upload_multiple", methods=["POST"])
+@login_required
 @api.validate(
     resp=DocResponse(r=CosOutSchemaList),
     tags=["cos"],
+    security=[AuthorizationBearerSecurity],
 )
 def upload_multiple():
     images = []
@@ -78,24 +86,25 @@ def upload_image_and_create_cos(name: str, data: bytes) -> dict:
         return res
 
     file_key = COS.generate_key(name)
-    client.put_object(
-        Bucket=bucket,
-        Body=data,
-        Key=file_key,
-        StorageClass="STANDARD"
-    )
+    client.put_object(Bucket=bucket, Body=data, Key=file_key, StorageClass="STANDARD")
     res = {"file_name": name, "file_key": file_key}
     url = COS.get_url(client, bucket, file_key)
     if lin_config.get_config("cos.need_return_url"):
         # 返回永久链接
-        res['url'] = url
+        res["url"] = url
     else:
         # 返回临时链接
-        res['url'] = COS.get_presigned_url(client, bucket, file_key)
+        res["url"] = COS.get_presigned_url(client, bucket, file_key)
     file_size = COS.get_size(client, bucket, file_key)
     with db.auto_commit():
-        cos_data = {"file_name": name, "file_key": file_key, "file_md5": file_md5,
-                    "file_size": file_size, "status": "UPLOADED", "commit": True}
+        cos_data = {
+            "file_name": name,
+            "file_key": file_key,
+            "file_md5": file_md5,
+            "file_size": file_size,
+            "status": "UPLOADED",
+            "commit": True,
+        }
         if lin_config.get_config("cos.need_save_url"):
             cos_data["url"] = url
         one = COS.create(**cos_data)
@@ -104,8 +113,7 @@ def upload_image_and_create_cos(name: str, data: bytes) -> dict:
 
 
 def get_cos_client():
-    from qcloud_cos import CosConfig
-    from qcloud_cos import CosS3Client
+    from qcloud_cos import CosConfig, CosS3Client
 
     token, proxies, endpoint, domain = None, None, None, None
     secret_id = lin_config.get_config("cos.access_key_id")
@@ -134,4 +142,6 @@ def get_cos_client():
 
 
 def allowed_file(filename):
-    return "." in filename and (filename.rsplit(".", 1)[1]).lower() in lin_config.get_config("cos.allowed_extensions", [])
+    return "." in filename and (filename.rsplit(".", 1)[1]).lower() in lin_config.get_config(
+        "cos.allowed_extensions", []
+    )
